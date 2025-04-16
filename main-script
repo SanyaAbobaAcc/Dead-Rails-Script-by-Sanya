@@ -136,21 +136,11 @@ local function IsValidTarget(model)
     if not hum or hum.Health <= 0 then return false end
     local player = Players:GetPlayerFromCharacter(model)
     if Settings.IgnorePlayers and player then return false end
-    if Settings.TeamCheck and player and LocalPlayer.Team == player.Team then return false end
-    if Settings.WallCheck then
-        local root = model:FindFirstChild("HumanoidRootPart")
-        if not root then return false end
-        local rayParams = RaycastParams.new()
-        rayParams.FilterType = Enum.RaycastFilterType.Blacklist
-        rayParams.FilterDescendantsInstances = {Camera, LocalPlayer.Character, model}
-        local result = Workspace:Raycast(Camera.CFrame.Position, (root.Position - Camera.CFrame.Position).Unit * Settings.MaxDistance, rayParams)
-        if result and not result.Instance:IsDescendantOf(model) then return false end
-    end
     return true
 end
  
 local function GetTargetPart(model)
-    return model:FindFirstChild(Settings.PriorityPart) or model:FindFirstChild("HumanoidRootPart")
+    return model:FindFirstChild(Settings.PriorityPart) or model:FindFirstChild("Head"):FindFirstChildOfClass("BasePart") or model:FindFirstChild("Head"):FindFirstChildOfClass("MeshPart")
 end
  
 -- Цикл поиска цели
@@ -211,7 +201,6 @@ RunService.RenderStepped:Connect(function()
             if part:IsA("BasePart") and part.CanCollide then
                 part.CanCollide = false
             end
-        end
     else
         if MyCharacter then
             local head = MyCharacter:FindFirstChild("Head")
