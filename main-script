@@ -196,24 +196,26 @@ RunService.RenderStepped:Connect(function()
         enableFullbright()
     end
     
-    if Settings.Noclip and MyCharacter then
+if Settings.Noclip and MyCharacter then
+    for _, part in pairs(MyCharacter:GetDescendants()) do
+        if part:IsA("BasePart") and part.CanCollide then
+            part.CanCollide = false
+        end
+    end
+else
+    if MyCharacter then
+        local head = MyCharacter:FindFirstChild("Head")
+        local torso = MyCharacter:FindFirstChild("Torso")
+        if head then head.CanCollide = true end
+        if torso then torso.CanCollide = true end
         for _, part in pairs(MyCharacter:GetDescendants()) do
-            if part:IsA("BasePart") and part.CanCollide then
+            if part:IsA("BasePart") and part.CanCollide and part.Name ~= "Head" and part.Name ~= "Torso" then
                 part.CanCollide = false
-            end
-    else
-        if MyCharacter then
-            local head = MyCharacter:FindFirstChild("Head")
-            local torso = MyCharacter:FindFirstChild("Torso")
-            if head then head.CanCollide = true end
-            if torso then torso.CanCollide = true end
-            for _, part in pairs(MyCharacter:GetDescendants()) do
-                if part:IsA("BasePart") and part.CanCollide and part.Name ~= "Head" and part.Name ~= "Torso" then
-                    part.CanCollide = false
-                end
             end
         end
     end
+end
+
     
     if FOV_Circle then
         FOV_Circle.Position = MousePos
