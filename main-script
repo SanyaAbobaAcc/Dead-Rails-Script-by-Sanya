@@ -132,15 +132,28 @@ UtilityTab:CreateToggle({
 -- Проверка валидности цели
 local function IsValidTarget(model)
     if not model:IsA("Model") or model == MyCharacter then return false end
+
     local hum = model:FindFirstChildOfClass("Humanoid")
     if not hum or hum.Health <= 0 then return false end
+
     local player = Players:GetPlayerFromCharacter(model)
     if Settings.IgnorePlayers and player then return false end
+
     return true
 end
- 
+
 local function GetTargetPart(model)
-    return model:FindFirstChild(Settings.PriorityPart) or model:FindFirstChild("Head"):FindFirstChildOfClass("BasePart") or model:FindFirstChild("Head"):FindFirstChildOfClass("MeshPart")
+    if not model or not model:IsA("Model") then return nil end
+
+    local part = model:FindFirstChild(Settings.PriorityPart)
+    if part and part:IsA("BasePart") then return part end
+
+    local head = model:FindFirstChild("Head")
+    if head and head:IsA("BasePart") then
+        return head
+    end
+
+    return nil
 end
  
 -- Цикл поиска цели
