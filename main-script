@@ -1,0 +1,294 @@
+-- Загрузка Rayfield UI
+local Rayfield = loadstring(game:HttpGet('https://sirius.menu/rayfield'))()
+ 
+-- Создание окна
+local Window = Rayfield:CreateWindow({
+    Name = "Custom Aimbot",
+    LoadingTitle = "Aimbot Loading",
+    LoadingSubtitle = "by Sanya",
+    ConfigurationSaving = {
+        Enabled = false,
+        FolderName = "UltraAimbot",
+        FileName = "Config.json"
+    },
+    KeySystem = true, -- Set this to true to use our key system
+    KeySettings = {
+      Title = "Dead Rails Script.",
+      Subtitle = "Enter Key To Get Access Of The Script.",
+      Note = "Ask Me For Key.", -- Use this to tell the user how to get a key
+      FileName = "Key", -- It is recommended to use something unique as other scripts using Rayfield may overwrite your key file
+      SaveKey = true, -- The user's key will be saved, but if you change the key, they will be unable to use your script
+      GrabKeyFromSite = false, -- If this is true, set Key below to the RAW site you would like Rayfield to get the key from
+      Key = {"q4F5YqeL"}, -- List of keys that will be accepted by the system, can be RAW file links (pastebin, github etc) or simple strings ("hello","key22")
+   },
+})
+ 
+-- Таб для Aimbot
+local AimbotTab = Window:CreateTab("Aimbot", 4483362458)
+local FullbrightTab = Window:CreateTab("Fullbright", 4483362458)
+local UtilityTab = Window:CreateTab("Utility", 4483362458)
+ 
+-- Настройки
+local Settings = {
+    Enabled = false,
+    AimFOV = 120,
+    MaxDistance = 500,
+    Smoothing = 0.5,
+    PriorityPart = "Head",
+    Use3DDistance = true,
+    IgnorePlayers = false,
+    TeamCheck = false,
+    WallCheck = false,
+    LockCamera = true,
+    AutoShoot = false,
+    ShowFOV = true,
+    FOVVisible = true,
+    FOVFilled = false,
+    fullbright = false,
+    FOVThickness = 2,
+    FOVColor = Color3.fromRGB(255, 255, 255),
+    AimKey = Enum.KeyCode.E,
+    ShootKey = Enum.KeyCode.F,
+    RefreshRate = 0.2,
+    Noclip = false,
+    NoclipKey = Enum.KeyCode.V,
+}
+ 
+-- Сервисы
+local Players = game:GetService("Players")
+local RunService = game:GetService("RunService")
+local UserInputService = game:GetService("UserInputService")
+local Workspace = game:GetService("Workspace")
+local Lighting = game:GetService("Lighting")
+local LocalPlayer = Players.LocalPlayer
+local Camera = Workspace.CurrentCamera
+local MyCharacter = LocalPlayer.Character or LocalPlayer.CharacterAdded:Wait()
+ 
+-- Переменные
+local Aiming = false
+local Shooting = false
+local LockedTarget = nil
+local TargetList = {}
+local MousePos = Vector2.new()
+local FOV_Circle
+ 
+-- Инициализация FOV круга
+local function InitializeFOV()
+    if FOV_Circle then FOV_Circle:Remove() end
+    FOV_Circle = Drawing.new("Circle")
+    FOV_Circle.Transparency = 1
+    FOV_Circle.Color = Settings.FOVColor
+    FOV_Circle.Thickness = Settings.FOVThickness
+    FOV_Circle.Filled = Settings.FOVFilled
+    FOV_Circle.Visible = Settings.ShowFOV and Settings.FOVVisible
+end
+ 
+local function enableFullbright()
+    Lighting.Ambient = Color3.new(1, 1, 1)
+    Lighting.Brightness = 2
+    Lighting.GlobalShadows = false
+    Lighting.OutdoorAmbient = Color3.new(1, 1, 1)
+    for _, v in pairs(Lighting:GetChildren()) do
+        if v:IsA("Atmosphere") then
+            v:Destroy()
+        end
+    end
+end
+ 
+local function NoclipLoop()
+    RunService.Stepped:Connect(function()
+        if Settings.Noclip and MyCharacter then
+            for _, part in pairs(MyCharacter:GetDescendants()) do
+                if part:IsA("BasePart") and part.CanCollide then
+                    part.CanCollide = false
+                end
+            end
+        end
+    end)
+end
+ 
+ 
+ 
+InitializeFOV()
+ 
+FullbrightTab:CreateToggle({
+    Name = "Enable Fullbright",
+    CurrentValue = false,
+    Callback = function(Value)
+        Settings.fullbright = Value
+    end,
+})
+ 
+-- UI элементы
+AimbotTab:CreateSection("Main")
+AimbotTab:CreateToggle({Name = "Enable Aimbot", CurrentValue = Settings.Enabled, Callback = function(v) Settings.Enabled = v end})
+AimbotTab:CreateToggle({Name = "Auto Shoot", CurrentValue = Settings.AutoShoot, Callback = function(v) Settings.AutoShoot = v end})
+--AimbotTab:CreateKeybind({Name = "Aim Key", CurrentKeybind = Settings.AimKey, HoldToInteract = false, Callback = function(k) Settings.AimKey = k end})
+--AimbotTab:CreateKeybind({Name = "Shoot Key", CurrentKeybind = Settings.ShootKey, HoldToInteract = false, Callback = function(k) Settings.ShootKey = k end})
+ 
+AimbotTab:CreateSection("Targeting")
+AimbotTab:CreateSlider({Name = "Aim FOV", Range = {50, 500}, Increment = 5, CurrentValue = Settings.AimFOV, Callback = function(v) Settings.AimFOV = v end})
+AimbotTab:CreateSlider({Name = "Max Distance", Range = {100, 2000}, Increment = 50, CurrentValue = Settings.MaxDistance, Callback = function(v) Settings.MaxDistance = v end})
+AimbotTab:CreateDropdown({Name = "Priority Part", Options = {"Head", "HumanoidRootPart", "UpperTorso"}, CurrentOption = Settings.PriorityPart, Callback = function(v) Settings.PriorityPart = v end})
+AimbotTab:CreateSlider({Name = "Smoothing", Range = {0.1, 1}, Increment = 0.05, CurrentValue = Settings.Smoothing, Callback = function(v) Settings.Smoothing = v end})
+AimbotTab:CreateToggle({Name = "Ignore Players", CurrentValue = Settings.IgnorePlayers, Callback = function(v) Settings.IgnorePlayers = v end})
+--AimbotTab:CreateToggle({Name = "Team Check", CurrentValue = Settings.TeamCheck, Callback = function(v) Settings.TeamCheck = v end})
+--AimbotTab:CreateToggle({Name = "Wall Check", CurrentValue = Settings.WallCheck, Callback = function(v) Settings.WallCheck = v end})
+ 
+AimbotTab:CreateSection("FOV Circle")
+AimbotTab:CreateToggle({Name = "Show FOV", CurrentValue = Settings.ShowFOV, Callback = function(v) Settings.ShowFOV = v FOV_Circle.Visible = v and Settings.FOVVisible end})
+AimbotTab:CreateToggle({Name = "FOV Filled", CurrentValue = Settings.FOVFilled, Callback = function(v) Settings.FOVFilled = v FOV_Circle.Filled = v end})
+AimbotTab:CreateSlider({Name = "FOV Thickness", Range = {1, 10}, Increment = 1, CurrentValue = Settings.FOVThickness, Callback = function(v) Settings.FOVThickness = v FOV_Circle.Thickness = v end})
+AimbotTab:CreateColorPicker({Name = "FOV Color", Color = Settings.FOVColor, Callback = function(c) Settings.FOVColor = c FOV_Circle.Color = c end})
+UtilityTab:CreateSection("Noclip")
+UtilityTab:CreateToggle({
+    Name = "Enable Noclip", 
+    CurrentValue = Settings.Noclip, 
+    Callback = function(v) 
+        Settings.Noclip = v 
+    end
+})
+ 
+ 
+ 
+-- Проверка валидности цели
+local function IsValidTarget(model)
+    if not model:IsA("Model") or model == MyCharacter then return false end
+    local hum = model:FindFirstChildOfClass("Humanoid")
+    if not hum or hum.Health <= 0 then return false end
+    local player = Players:GetPlayerFromCharacter(model)
+    if Settings.IgnorePlayers and player then return false end
+    if Settings.TeamCheck and player and LocalPlayer.Team == player.Team then return false end
+    if Settings.WallCheck then
+        local root = model:FindFirstChild("HumanoidRootPart")
+        if not root then return false end
+        local rayParams = RaycastParams.new()
+        rayParams.FilterType = Enum.RaycastFilterType.Blacklist
+        rayParams.FilterDescendantsInstances = {Camera, LocalPlayer.Character, model}
+        local result = Workspace:Raycast(Camera.CFrame.Position, (root.Position - Camera.CFrame.Position).Unit * Settings.MaxDistance, rayParams)
+        if result and not result.Instance:IsDescendantOf(model) then return false end
+    end
+    return true
+end
+ 
+local function GetTargetPart(model)
+    return model:FindFirstChild(Settings.PriorityPart) or model:FindFirstChild("HumanoidRootPart")
+end
+ 
+-- Цикл поиска цели
+task.spawn(function()
+    while true do
+        if Settings.Enabled and Aiming then
+            local bestTarget, closestDist = nil, math.huge
+            local myPos = MyCharacter:GetPivot().Position
+ 
+            for _, model in ipairs(Workspace:GetChildren()) do
+                if not IsValidTarget(model) then continue end
+                local part = GetTargetPart(model)
+                if not part then continue end
+ 
+                local dist3D = (part.Position - myPos).Magnitude
+                if Settings.Use3DDistance and dist3D > Settings.MaxDistance then continue end
+ 
+                local screenPos, onScreen = Camera:WorldToViewportPoint(part.Position)
+                if not onScreen then continue end
+ 
+                local dist2D = (Vector2.new(screenPos.X, screenPos.Y) - MousePos).Magnitude
+                if dist2D > Settings.AimFOV then continue end
+ 
+                if dist2D < closestDist then
+                    closestDist = dist2D
+                    bestTarget = part
+                end
+            end
+ 
+            if bestTarget then
+                LockedTarget = bestTarget
+            end
+        else
+            LockedTarget = nil
+        end
+ 
+        task.wait(Settings.RefreshRate)
+    end
+end)
+ 
+-- Цикл поворота камеры
+RunService.RenderStepped:Connect(function()
+    MousePos = UserInputService:GetMouseLocation()
+    if Settings.fullbright then
+        enableFullbright()
+    end
+    if FOV_Circle then
+        FOV_Circle.Position = MousePos
+        FOV_Circle.Radius = Settings.AimFOV
+        FOV_Circle.Visible = Settings.ShowFOV and Settings.FOVVisible
+    end
+ 
+    if Settings.Enabled and LockedTarget and LockedTarget.Parent then
+        if Aiming then
+        local camPos = Camera.CFrame.Position
+        local direction = (LockedTarget.Position - camPos).Unit
+        local smoothDirection = Camera.CFrame.LookVector:Lerp(direction, Settings.Smoothing)
+ 
+        Camera.CFrame = CFrame.lookAt(camPos, camPos + smoothDirection)
+ 
+            if Settings.AutoShoot and Shooting then
+                mouse1press()
+                task.wait(0.03)
+                mouse1release()
+            end
+        end
+    end
+end)
+ 
+-- Обработка клавиш
+UserInputService.InputBegan:Connect(function(input, gameProcessed)
+    if gameProcessed then return end
+    if input.KeyCode == Settings.AimKey then
+      Aiming = not Aiming
+        if not Aiming then
+            LockedTarget = nil
+        end
+        end
+    if input.KeyCode == Settings.ShootKey then
+        Shooting = not Shooting
+        end
+    if input.KeyCode == Settings.NoclipKey then
+            Settings.Noclip = not Settings.Noclip
+            Rayfield:Notify({
+                Title = "Noclip",
+                Content = Settings.Noclip and "Enabled" or "Disabled",
+                Duration = 2,
+                Image = 4483362458
+            })
+            end
+ 
+        
+end)
+ 
+-- Запускаем Noclip loop
+task.spawn(NoclipLoop)
+ 
+-- Обновляем обработчик CharacterAdded для переподключения Noclip
+LocalPlayer.CharacterAdded:Connect(function(character)
+    MyCharacter = character
+    task.wait(1) -- Небольшая задержка для загрузки персонажа
+    if Settings.Noclip then
+        for _, part in pairs(MyCharacter:GetDescendants()) do
+            if part:IsA("BasePart") and part.CanCollide then
+                part.CanCollide = false
+            end
+        end
+    end
+end)
+-- Уведомление
+Rayfield:Notify({
+    Title = "Aimbot Loaded",
+    Content = "Simple & Customizable Aimbot Loaded",
+    Duration = 6,
+    Image = 4483362458
+})
+ 
+-- Загрузка конфигурации
+--Rayfield:LoadConfiguration()
