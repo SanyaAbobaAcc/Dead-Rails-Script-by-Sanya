@@ -35,7 +35,7 @@ local Settings = {
     AutoAim = true, -- Новая настройка для автоматического прицеливания
     AimFOV = 120,
     MaxDistance = 500,
-    Smoothing = 0.5,
+    Smoothing = 0.8,
     PriorityPart = "Head",
     Use3DDistance = true,
     IgnorePlayers = true, -- По умолчанию игнорируем игроков
@@ -47,7 +47,7 @@ local Settings = {
     FOVFilled = false,
     fullbright = false,
     FOVThickness = 2,
-    FOVColor = Color3.fromRGB(255, 0, 0),
+    FOVColor = Color3.fromRGB(255, 255, 255),
     AimKey = Enum.KeyCode.E,
     ShootKey = Enum.KeyCode.F,
     RefreshRate = 0.1, -- Увеличена частота обновления
@@ -321,16 +321,18 @@ UserInputService.InputBegan:Connect(function(input, gameProcessed)
     
     -- Ручное включение/выключение прицеливания
     if input.KeyCode == Settings.AimKey then
+        if not Settings.AutoAim then -- Только если авто-прицеливание выключено
             Aiming = not Aiming
             if not Aiming then
                 LockedTarget = nil
             end
             Rayfield:Notify({
                 Title = "Aimbot",
-                Content = Aiming and "Aim Enabled" or "Aim Disabled",
+                Content = Aiming and "Manual Aim Enabled" or "Manual Aim Disabled",
                 Duration = 2,
                 Image = 4483362458
             })
+        end
     end
     
     -- Включение/выключение авто-стрельбы
