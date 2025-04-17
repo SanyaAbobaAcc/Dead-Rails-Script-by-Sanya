@@ -1,10 +1,10 @@
 -- Загрузка Rayfield UI
 local Rayfield = loadstring(game:HttpGet('https://sirius.menu/rayfield'))()
-local scrVer = "0.4.3"
+local scrVer = "0.4.4"
 
 -- Создание окна
 local Window = Rayfield:CreateWindow({
-    Name = "Custom Aimbot",
+    Name = "Auto NPC Aimbot",
     LoadingTitle = "Aimbot Loading",
     LoadingSubtitle = "by Sanya",
     ConfigurationSaving = {
@@ -14,9 +14,9 @@ local Window = Rayfield:CreateWindow({
     },
     KeySystem = true,
     KeySettings = {
-      Title = "Dead Rails Script.",
-      Subtitle = "Enter Key To Get Access Of The Script.",
-      Note = "Ask Me For Key.",
+      Title = "Dead Rails Script",
+      Subtitle = "Enter Key To Get Access Of The Script",
+      Note = "Ask Me For Key",
       FileName = "Key",
       SaveKey = true,
       GrabKeyFromSite = false,
@@ -31,13 +31,14 @@ local UtilityTab = Window:CreateTab("Utility", 4483362458)
  
 -- Настройки
 local Settings = {
-    Enabled = false,
+    Enabled = true,
+    AutoAim = true, -- Новая настройка для автоматического прицеливания
     AimFOV = 120,
     MaxDistance = 500,
     Smoothing = 0.5,
     PriorityPart = "Head",
     Use3DDistance = true,
-    IgnorePlayers = false,
+    IgnorePlayers = true, -- По умолчанию игнорируем игроков
     TeamCheck = false,
     WallCheck = false,
     AutoShoot = false,
@@ -46,10 +47,10 @@ local Settings = {
     FOVFilled = false,
     fullbright = false,
     FOVThickness = 2,
-    FOVColor = Color3.fromRGB(255, 255, 255),
+    FOVColor = Color3.fromRGB(255, 0, 0),
     AimKey = Enum.KeyCode.E,
     ShootKey = Enum.KeyCode.F,
-    RefreshRate = 0.2,
+    RefreshRate = 0.1, -- Увеличена частота обновления
     Noclip = false,
 }
  
@@ -70,7 +71,7 @@ local LockedTarget = nil
 local MousePos = Vector2.new()
 local LastMousePos = Vector2.new()
 local FOV_Circle
-local NPCList = {} -- Кэш для NPC
+local NPCList = {}
  
 -- Инициализация FOV круга
 local function InitializeFOV()
@@ -81,6 +82,7 @@ local function InitializeFOV()
     FOV_Circle.Thickness = Settings.FOVThickness
     FOV_Circle.Filled = Settings.FOVFilled
     FOV_Circle.Visible = Settings.ShowFOV and Settings.FOVVisible
+    FOV_Circle.Radius = Settings.AimFOV
 end
  
 local function enableFullbright()
@@ -95,6 +97,68 @@ local function enableFullbright()
     end
 end
  
+-- UI элементы
+AimbotTab:CreateSection("Main")
+AimbotTab:CreateToggle({Name = "Enable Aimbot", CurrentValue = Settings.Enabled, Callback = function(v) 
+    Settings.Enabled = v 
+    if not v then 
+        Aiming = false
+        LockedTarget = nil
+    end
+end})
+
+AimbotTab:CreateToggle({Name = "Auto Aim NPC", CurrentValue = Settings.AutoAim, Callback = function(v) 
+    Settings.AutoAim = v 
+    if not v then 
+        Aiming = false
+        LockedTarget = nil
+    end
+end})
+
+AimbotTab:CreateToggle({Name = "Auto Shoot", CurrentValue = Settings.AutoShoot, Callback = function(v) Settings.AutoShoot = v end})
+ 
+AimbotTab:CreateSection("Targeting")
+AimbotTab:CreateSlider({Name = "Aim FOV", Range = {50, 500}, Increment = 5, CurrentValue = Settings.AimFOV, Callback = function(v) 
+    Settings.AimFOV = v 
+    if FOV_Circle then
+        FOV_Circle.Radius = v
+    end
+end})
+
+AimbotTab:CreateSlider({Name = "Max Distance", Range = {100, 2000}, Increment = 50, CurrentValue = Settings.MaxDistance, Callback = function(v) Settings.MaxDistance = v end})
+AimbotTab:CreateDropdown({Name = "Priority Part", Options = {"Head", "HumanoidRootPart", "UpperTorso"}, CurrentOption = Settings.PriorityPart, Callback = function(v) Settings.PriorityPart = v end})
+AimbotTab:CreateSlider({Name = "Smoothing", Range = {0.1, 1}, Increment = 0.05, CurrentValue = Settings.Smoothing, Callback = function(v) Settings.Smoothing = v end})
+AimbotTab:CreateToggle({Name = "Ignore Players", CurrentValue = Settings.IgnorePlayers, Callback = function(v) Settings.IgnorePlayers = v end})
+ 
+AimbotTab:CreateSection("FOV Circle")
+AimbotTab:CreateToggle({Name = "Show FOV", CurrentValue = Settings.ShowFOV, Callback = function(v) 
+    Settings.ShowFOV = v 
+    if FOV_Circle then
+        FOV_Circle.Visible = v and Settings.FOVVisible
+    end
+end})
+
+AimbotTab:CreateToggle({Name = "FOV Filled", CurrentValue = Settings.FOVFilled, Callback = function(v) 
+    Settings.FOVFilled = v 
+    if FOV_Circle then
+        FOV_Circle.Filled = v
+    end
+end})
+
+AimbotTab:CreateSlider({Name = "FOV Thickness", Range = {1, 10}, Increment = 1, CurrentValue = Settings.FOVThickness, Callback = function(v) 
+    Settings.FOVThickness = v 
+    if FOV_Circle then
+        FOV_Circle.Thickness = v
+    end
+end})
+
+AimbotTab:CreateColorPicker({Name = "FOV Color", Color = Settings.FOVColor, Callback = function(c) 
+    Settings.FOVColor = c 
+    if FOV_Circle then
+        FOV_Circle.Color = c
+    end
+end})
+
 FullbrightTab:CreateToggle({
     Name = "Enable Fullbright",
     CurrentValue = false,
@@ -102,24 +166,6 @@ FullbrightTab:CreateToggle({
         Settings.fullbright = Value
     end,
 })
- 
--- UI элементы
-AimbotTab:CreateSection("Main")
-AimbotTab:CreateToggle({Name = "Enable Aimbot", CurrentValue = Settings.Enabled, Callback = function(v) Settings.Enabled = v end})
-AimbotTab:CreateToggle({Name = "Auto Shoot", CurrentValue = Settings.AutoShoot, Callback = function(v) Settings.AutoShoot = v end})
- 
-AimbotTab:CreateSection("Targeting")
-AimbotTab:CreateSlider({Name = "Aim FOV", Range = {50, 500}, Increment = 5, CurrentValue = Settings.AimFOV, Callback = function(v) Settings.AimFOV = v end})
-AimbotTab:CreateSlider({Name = "Max Distance", Range = {100, 2000}, Increment = 50, CurrentValue = Settings.MaxDistance, Callback = function(v) Settings.MaxDistance = v end})
-AimbotTab:CreateDropdown({Name = "Priority Part", Options = {"Head", "HumanoidRootPart", "UpperTorso"}, CurrentOption = Settings.PriorityPart, Callback = function(v) Settings.PriorityPart = v end})
-AimbotTab:CreateSlider({Name = "Smoothing", Range = {0.1, 1}, Increment = 0.05, CurrentValue = Settings.Smoothing, Callback = function(v) Settings.Smoothing = v end})
-AimbotTab:CreateToggle({Name = "Ignore Players", CurrentValue = Settings.IgnorePlayers, Callback = function(v) Settings.IgnorePlayers = v end})
- 
-AimbotTab:CreateSection("FOV Circle")
-AimbotTab:CreateToggle({Name = "Show FOV", CurrentValue = Settings.ShowFOV, Callback = function(v) Settings.ShowFOV = v FOV_Circle.Visible = v and Settings.FOVVisible end})
-AimbotTab:CreateToggle({Name = "FOV Filled", CurrentValue = Settings.FOVFilled, Callback = function(v) Settings.FOVFilled = v FOV_Circle.Filled = v end})
-AimbotTab:CreateSlider({Name = "FOV Thickness", Range = {1, 10}, Increment = 1, CurrentValue = Settings.FOVThickness, Callback = function(v) Settings.FOVThickness = v FOV_Circle.Thickness = v end})
-AimbotTab:CreateColorPicker({Name = "FOV Color", Color = Settings.FOVColor, Callback = function(c) Settings.FOVColor = c FOV_Circle.Color = c end})
 
 UtilityTab:CreateSection("Noclip")
 UtilityTab:CreateToggle({
@@ -130,7 +176,7 @@ UtilityTab:CreateToggle({
     end
 })
 
--- Проверка валидности цели (работает и для NPC, и для игроков)
+-- Проверка валидности цели
 local function IsValidTarget(model)
     if not model:IsA("Model") or model == MyCharacter then return false end
 
@@ -175,118 +221,92 @@ local function UpdateNPCList()
     end
 end
 
+-- Автоматическое наведение на ближайшего NPC в радиусе FOV
+local function AutoAimAtNearestNPC()
+    if not Settings.Enabled or not Settings.AutoAim or not MyCharacter then return end
+    
+    local myPos = MyCharacter:GetPivot().Position
+    local bestTarget, closestDist = nil, Settings.AimFOV + 1 -- Добавляем 1 чтобы избежать точного совпадения
+    
+    -- Проверяем NPC из списка
+    for _, model in ipairs(NPCList) do
+        if not IsValidTarget(model) then continue end
+        
+        local part = GetTargetPart(model)
+        if not part then continue end
+        
+        local dist3D = (part.Position - myPos).Magnitude
+        if Settings.Use3DDistance and dist3D > Settings.MaxDistance then continue end
+        
+        local screenPos, onScreen = Camera:WorldToViewportPoint(part.Position)
+        if not onScreen then continue end
+        
+        local dist2D = (Vector2.new(screenPos.X, screenPos.Y) - MousePos).Magnitude
+        if dist2D > Settings.AimFOV then continue end
+        
+        if dist2D < closestDist then
+            closestDist = dist2D
+            bestTarget = part
+        end
+    end
+    
+    -- Автоматически включаем прицеливание если нашли цель
+    if bestTarget then
+        LockedTarget = bestTarget
+        Aiming = true
+    else
+        Aiming = false
+        LockedTarget = nil
+    end
+end
+
 -- Периодическое обновление списка NPC
 task.spawn(function()
     while true do
         UpdateNPCList()
-        task.wait(5) -- Обновляем список каждые 5 секунд для оптимизации
+        task.wait(3) -- Обновляем список каждые 3 секунды для оптимизации
     end
 end)
 
--- Цикл поиска цели (оптимизированный)
-task.spawn(function()
-    while true do
-        if Settings.Enabled and Aiming then
-            local bestTarget, closestDist = nil, math.huge
-            local myPos = MyCharacter:GetPivot().Position
-
-            -- Проверяем NPC из кэша
-            for _, model in ipairs(NPCList) do
-                if not IsValidTarget(model) then continue end
-                local part = GetTargetPart(model)
-                if not part then continue end
-
-                local dist3D = (part.Position - myPos).Magnitude
-                if Settings.Use3DDistance and dist3D > Settings.MaxDistance then continue end
-
-                local screenPos, onScreen = Camera:WorldToViewportPoint(part.Position)
-                if not onScreen then continue end
-
-                local dist2D = (Vector2.new(screenPos.X, screenPos.Y) - MousePos).Magnitude
-                if dist2D > Settings.AimFOV then continue end
-
-                if dist2D < closestDist then
-                    closestDist = dist2D
-                    bestTarget = part
-                end
-            end
-
-            -- Если не игнорируем игроков, проверяем их тоже
-            if not Settings.IgnorePlayers then
-                for _, player in ipairs(Players:GetPlayers()) do
-                    if player == LocalPlayer then continue end
-                    local model = player.Character
-                    if not model or not IsValidTarget(model) then continue end
-                    
-                    local part = GetTargetPart(model)
-                    if not part then continue end
-
-                    local dist3D = (part.Position - myPos).Magnitude
-                    if Settings.Use3DDistance and dist3D > Settings.MaxDistance then continue end
-
-                    local screenPos, onScreen = Camera:WorldToViewportPoint(part.Position)
-                    if not onScreen then continue end
-
-                    local dist2D = (Vector2.new(screenPos.X, screenPos.Y) - MousePos).Magnitude
-                    if dist2D > Settings.AimFOV then continue end
-
-                    if dist2D < closestDist then
-                        closestDist = dist2D
-                        bestTarget = part
-                    end
-                end
-            end
-
-            LockedTarget = bestTarget
-        else
-            LockedTarget = nil
-        end
-
-        task.wait(Settings.RefreshRate)
-    end
-end)
-
--- Цикл поворота камеры
-RunService.RenderStepped:Connect(function()
+-- Основной цикл прицеливания
+RunService.RenderStepped:Connect(function(deltaTime)
     LastMousePos = MousePos
     MousePos = UserInputService:GetMouseLocation()
     
-    -- Check if mouse moved significantly to stop aiming
-    if Aiming and (MousePos - LastMousePos).Magnitude > 10 then
-        Aiming = false
-        LockedTarget = nil
+    -- Обновляем позицию FOV круга
+    if FOV_Circle then
+        FOV_Circle.Position = MousePos
+        FOV_Circle.Visible = Settings.ShowFOV and Settings.FOVVisible
     end
     
+    -- Автоматическое прицеливание
+    if Settings.AutoAim then
+        AutoAimAtNearestNPC()
+    end
+    
+    -- Fullbright
     if Settings.fullbright then
         enableFullbright()
     end
     
+    -- Noclip
     if Settings.Noclip and MyCharacter then
         for _, part in pairs(MyCharacter:GetDescendants()) do
-            if part:IsA("BasePart") and part.CanCollide then
+            if part:IsA("BasePart") then
                 part.CanCollide = false
             end
         end
-    elseif MyCharacter then
-        local head = MyCharacter:FindFirstChild("Head")
-        local torso = MyCharacter:FindFirstChild("Torso") or MyCharacter:FindFirstChild("UpperTorso")
-        if head then head.CanCollide = true end
-        if torso then torso.CanCollide = true end
     end
     
-    if FOV_Circle then
-        FOV_Circle.Position = MousePos
-        FOV_Circle.Radius = Settings.AimFOV
-        FOV_Circle.Visible = Settings.ShowFOV and Settings.FOVVisible
-    end
-
+    -- Прицеливание и плавное движение камеры
     if Settings.Enabled and LockedTarget and LockedTarget.Parent and Aiming then
         local camPos = Camera.CFrame.Position
         local direction = (LockedTarget.Position - camPos).Unit
         local smoothDirection = Camera.CFrame.LookVector:Lerp(direction, Settings.Smoothing)
-
+        
         Camera.CFrame = CFrame.lookAt(camPos, camPos + smoothDirection)
-
+        
+        -- Автоматическая стрельба
         if Settings.AutoShoot and Shooting then
             mouse1press()
             task.wait(0.03)
@@ -298,29 +318,24 @@ end)
 -- Обработка клавиш
 UserInputService.InputBegan:Connect(function(input, gameProcessed)
     if gameProcessed then return end
+    
+    -- Ручное включение/выключение прицеливания
     if input.KeyCode == Settings.AimKey then
-        Aiming = not Aiming
-        if not Aiming then
-            LockedTarget = nil
-            if Settings.Enabled then
-                Rayfield:Notify({
-                    Title = "Aimbot",
-                    Content = "Disabled",
-                    Duration = 2,
-                    Image = 4483362458
-                })
+        if not Settings.AutoAim then -- Только если авто-прицеливание выключено
+            Aiming = not Aiming
+            if not Aiming then
+                LockedTarget = nil
             end
-        else
-            if Settings.Enabled then
-                Rayfield:Notify({
-                    Title = "Aimbot",
-                    Content = "Enabled",
-                    Duration = 2,
-                    Image = 4483362458
-                })
-            end
+            Rayfield:Notify({
+                Title = "Aimbot",
+                Content = Aiming and "Manual Aim Enabled" or "Manual Aim Disabled",
+                Duration = 2,
+                Image = 4483362458
+            })
         end
     end
+    
+    -- Включение/выключение авто-стрельбы
     if input.KeyCode == Settings.ShootKey then
         Shooting = not Shooting
         Rayfield:Notify({
@@ -329,14 +344,17 @@ UserInputService.InputBegan:Connect(function(input, gameProcessed)
             Duration = 2,
             Image = 4483362458
         })
-    end     
+    end
 end)
 
+-- Инициализация
 InitializeFOV()
+UpdateNPCList()
+
 -- Уведомление
 Rayfield:Notify({
-    Title = "Script Loaded",
-    Content = "Script Version: " .. scrVer,
+    Title = "Auto NPC Aimbot Loaded",
+    Content = "Version: " .. scrVer .. "\nAuto Aim: " .. tostring(Settings.AutoAim),
     Duration = 5,
     Image = 4483362458
 })
