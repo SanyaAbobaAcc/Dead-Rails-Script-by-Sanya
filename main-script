@@ -24,16 +24,30 @@ local Window = Rayfield:CreateWindow({
    },
 })
 
--- Табы
-local AimbotTab = Window:CreateTab("Aimbot", 4483362458)
-local FullbrightTab = Window:CreateTab("Fullbright", 4483362458)
-local UtilityTab = Window:CreateTab("Utility", 4483362458)
+-- Сервисы
+local Players = game:GetService("Players")
+local RunService = game:GetService("RunService")
+local UserInputService = game:GetService("UserInputService")
+local Workspace = game:GetService("Workspace")
+local Lighting = game:GetService("Lighting")
+local LocalPlayer = Players.LocalPlayer
+local Camera = Workspace.CurrentCamera
+
+-- Переменные
+local MyCharacter = LocalPlayer.Character or LocalPlayer.CharacterAdded:Wait()
+local Aiming = false
+local Shooting = false
+local LockedTarget = nil
+local MousePos = Vector2.new()
+local LastMousePos = Vector2.new()
+local FOV_Circle
+local NPCList = {}
+local CharacterAddedConnection = nil
 
 -- Настройки
 local Settings = {
-    Enabled = true,
+    Enabled = false,
     AutoAim = true,
-    ManualAim = false, -- Новая настройка для ручного прицеливания
     AimFOV = 120,
     MaxDistance = 500,
     Smoothing = 0.5,
@@ -48,52 +62,36 @@ local Settings = {
     FOVFilled = false,
     fullbright = false,
     FOVThickness = 2,
-    FOVColor = Color3.fromRGB(255, 0, 0),
+    FOVColor = Color3.fromRGB(255, 255, 255),
     AimKey = Enum.KeyCode.E,
     ShootKey = Enum.KeyCode.F,
     RefreshRate = 0.1,
     Noclip = false,
 }
 
--- Сервисы
-local Players = game:GetService("Players")
-local RunService = game:GetService("RunService")
-local UserInputService = game:GetService("UserInputService")
-local Workspace = game:GetService("Workspace")
-local Lighting = game:GetService("Lighting")
-local LocalPlayer = Players.LocalPlayer
-local Camera = Workspace.CurrentCamera
-local MyCharacter = LocalPlayer.Character
-local CharacterAddedConnection
+-- Табы
+local AimbotTab = Window:CreateTab("Aimbot", 4483362458)
+local FullbrightTab = Window:CreateTab("Fullbright", 4483362458)
+local UtilityTab = Window:CreateTab("Utility", 4483362458)
 
--- Переменные
-local Aiming = false
-local Shooting = false
-local LockedTarget = nil
-local MousePos = Vector2.new()
-local LastMousePos = Vector2.new()
-local FOV_Circle
-local NPCList = {}
-local Alive = true
-
--- Функция для обработки смерти и возрождения
-local function HandleCharacter(character)
-    MyCharacter = character
-    Alive = true
-    
-    local humanoid = character:WaitForChild("Humanoid")
-    humanoid.Died:Connect(function()
-        Alive = false
-        LockedTarget = nil
-        Aiming = false
-    end)
+-- Функция для обработки смерти/возрождения персонажа
+local function SetupCharacter()
+    if MyCharacter then
+        local humanoid = MyCharacter:FindFirstChildOfClass("Humanoid")
+        if humanoid then
+            humanoid.Died:Connect(function()
+                -- Сбрасываем состояние при смерти
+                Aiming = false
+                LockedTarget = nil
+                Shooting = false
+                
+                -- Ждем нового персонажа
+                MyCharacter = LocalPlayer.CharacterAdded:Wait()
+                SetupCharacter()
+            end)
+        end
+    end
 end
-
--- Инициализация персонажа
-if MyCharacter then
-    HandleCharacter(MyCharacter)
-end
-CharacterAddedConnection = LocalPlayer.CharacterAdded:Connect(HandleCharacter)
 
 -- Инициализация FOV круга
 local function InitializeFOV()
@@ -131,16 +129,7 @@ end})
 
 AimbotTab:CreateToggle({Name = "Auto Aim NPC", CurrentValue = Settings.AutoAim, Callback = function(v) 
     Settings.AutoAim = v 
-    if not v and not Settings.ManualAim then
-        Aiming = false
-        LockedTarget = nil
-    end
-end})
-
-AimbotTab:CreateToggle({Name = "Manual Aim", CurrentValue = Settings.ManualAim, Callback = function(v) 
-    Settings.ManualAim = v 
-    if not v and not Settings.AutoAim then
-        Aiming = false
+    if not v and not Aiming then
         LockedTarget = nil
     end
 end})
@@ -208,7 +197,7 @@ UtilityTab:CreateToggle({
 
 -- Проверка валидности цели
 local function IsValidTarget(model)
-    if not model:IsA("Model") or model == MyCharacter then return false end
+    if not model or not model:IsA("Model") or model == MyCharacter then return false end
 
     local hum = model:FindFirstChildOfClass("Humanoid")
     if not hum or hum.Health <= 0 then return false end
@@ -251,7 +240,7 @@ end
 
 -- Автоматическое наведение на ближайшего NPC в радиусе FOV
 local function AutoAimAtNearestNPC()
-    if not Settings.Enabled or not Settings.AutoAim or not MyCharacter or not Alive then return end
+    if not Settings.Enabled or not MyCharacter then return end
     
     local myPos = MyCharacter:GetPivot().Position
     local bestTarget, closestDist = nil, Settings.AimFOV + 1
@@ -277,11 +266,10 @@ local function AutoAimAtNearestNPC()
         end
     end
     
-    if bestTarget then
+    if Settings.AutoAim and bestTarget then
         LockedTarget = bestTarget
         Aiming = true
-    elseif not Settings.ManualAim then
-        Aiming = false
+    elseif not Aiming then
         LockedTarget = nil
     end
 end
@@ -295,20 +283,28 @@ task.spawn(function()
 end)
 
 -- Основной цикл
-RunService.RenderStepped:Connect(function(deltaTime)
-    if not MyCharacter or not Alive then return end
-    
+RunService.RenderStepped:Connect(function()
+    -- Обновляем позицию мыши
     LastMousePos = MousePos
     MousePos = UserInputService:GetMouseLocation()
     
-    -- Обновляем позицию FOV круга
+    -- Обновляем FOV круг
     if FOV_Circle then
         FOV_Circle.Position = MousePos
         FOV_Circle.Visible = Settings.ShowFOV and Settings.FOVVisible
     end
     
+    -- Проверяем наличие персонажа
+    if not MyCharacter or not MyCharacter.Parent then
+        MyCharacter = LocalPlayer.Character
+        if MyCharacter then
+            SetupCharacter()
+        end
+        return
+    end
+    
     -- Автоматическое прицеливание
-    if Settings.AutoAim then
+    if Settings.Enabled then
         AutoAimAtNearestNPC()
     end
     
@@ -318,7 +314,7 @@ RunService.RenderStepped:Connect(function(deltaTime)
     end
     
     -- Noclip
-    if Settings.Noclip then
+    if Settings.Noclip and MyCharacter then
         for _, part in pairs(MyCharacter:GetDescendants()) do
             if part:IsA("BasePart") then
                 part.CanCollide = false
@@ -326,8 +322,8 @@ RunService.RenderStepped:Connect(function(deltaTime)
         end
     end
     
-    -- Прицеливание и плавное движение камеры
-    if Settings.Enabled and LockedTarget and LockedTarget.Parent and Aiming and Alive then
+    -- Прицеливание
+    if Settings.Enabled and LockedTarget and LockedTarget.Parent and Aiming then
         local camPos = Camera.CFrame.Position
         local direction = (LockedTarget.Position - camPos).Unit
         local smoothDirection = Camera.CFrame.LookVector:Lerp(direction, Settings.Smoothing)
@@ -345,48 +341,22 @@ end)
 
 -- Обработка клавиш
 UserInputService.InputBegan:Connect(function(input, gameProcessed)
-    if gameProcessed or not Alive then return end
+    if gameProcessed then return end
     
-    -- Ручное включение/выключение прицеливания
-    if input.KeyCode == Settings.AimKey and Settings.ManualAim then
-        Aiming = not Aiming
-        if Aiming then
-            -- Поиск цели для ручного прицеливания
-            local myPos = MyCharacter:GetPivot().Position
-            local bestTarget, closestDist = nil, math.huge
-            
-            for _, model in ipairs(NPCList) do
-                if not IsValidTarget(model) then continue end
-                
-                local part = GetTargetPart(model)
-                if not part then continue end
-                
-                local dist3D = (part.Position - myPos).Magnitude
-                if Settings.Use3DDistance and dist3D > Settings.MaxDistance then continue end
-                
-                local screenPos, onScreen = Camera:WorldToViewportPoint(part.Position)
-                if not onScreen then continue end
-                
-                local dist2D = (Vector2.new(screenPos.X, screenPos.Y) - MousePos).Magnitude
-                if dist2D > Settings.AimFOV then continue end
-                
-                if dist2D < closestDist then
-                    closestDist = dist2D
-                    bestTarget = part
-                end
+    -- Включение/выключение прицеливания (работает независимо от AutoAim)
+    if input.KeyCode == Settings.AimKey then
+        if Settings.Enabled then
+            Aiming = not Aiming
+            if not Aiming then
+                LockedTarget = nil
             end
-            
-            LockedTarget = bestTarget
-        else
-            LockedTarget = nil
+            Rayfield:Notify({
+                Title = "Aimbot",
+                Content = Aiming and "Manual Aim Enabled" or "Manual Aim Disabled",
+                Duration = 2,
+                Image = 4483362458
+            })
         end
-        
-        Rayfield:Notify({
-            Title = "Manual Aim",
-            Content = Aiming and "Enabled" or "Disabled",
-            Duration = 2,
-            Image = 4483362458
-        })
     end
     
     -- Включение/выключение авто-стрельбы
@@ -403,12 +373,13 @@ end)
 
 -- Инициализация
 InitializeFOV()
+SetupCharacter()
 UpdateNPCList()
 
 -- Уведомление
 Rayfield:Notify({
     Title = "Advanced NPC Aimbot Loaded",
-    Content = "Version: " .. scrVer .. "\nAuto Aim: " .. tostring(Settings.AutoAim) .. "\nManual Aim: " .. tostring(Settings.ManualAim),
+    Content = "Version: " .. scrVer,
     Duration = 5,
     Image = 4483362458
 })
