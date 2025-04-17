@@ -4,9 +4,9 @@ local scrVer = "0.4.4"
 
 -- Создание окна
 local Window = Rayfield:CreateWindow({
-    Name = "Auto NPC Aimbot",
-    LoadingTitle = "Aimbot Loading",
-    LoadingSubtitle = "by Sanya",
+    Name = "Dead Rails Script",
+    LoadingTitle = "Script Loading",
+    LoadingSubtitle = "By Sanya",
     ConfigurationSaving = {
         Enabled = false,
         FolderName = "UltraAimbot",
@@ -321,18 +321,16 @@ UserInputService.InputBegan:Connect(function(input, gameProcessed)
     
     -- Ручное включение/выключение прицеливания
     if input.KeyCode == Settings.AimKey then
-        if not Settings.AutoAim then -- Только если авто-прицеливание выключено
             Aiming = not Aiming
             if not Aiming then
                 LockedTarget = nil
             end
             Rayfield:Notify({
                 Title = "Aimbot",
-                Content = Aiming and "Manual Aim Enabled" or "Manual Aim Disabled",
+                Content = Aiming and "Aim Enabled" or "Aim Disabled",
                 Duration = 2,
                 Image = 4483362458
             })
-        end
     end
     
     -- Включение/выключение авто-стрельбы
