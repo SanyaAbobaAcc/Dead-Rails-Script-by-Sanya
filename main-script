@@ -1,6 +1,6 @@
 -- Загрузка Rayfield UI
 local Rayfield = loadstring(game:HttpGet('https://sirius.menu/rayfield'))()
-local scrVer = "0.4.5 BETA"
+local scrVer = "0.4.9 NOT STABLE"
 
 -- Создание окна
 local Window = Rayfield:CreateWindow({
@@ -73,6 +73,7 @@ local Settings = {
 local AimbotTab = Window:CreateTab("Aimbot", 4483362458)
 local FullbrightTab = Window:CreateTab("Fullbright", 4483362458)
 local UtilityTab = Window:CreateTab("Utility", 4483362458)
+local ChangelogsTab = Window:CreateTab("Changelogs", 4483362458)
 
 -- Функция для обработки смерти/возрождения персонажа
 local function SetupCharacter()
@@ -80,18 +81,35 @@ local function SetupCharacter()
         local humanoid = MyCharacter:FindFirstChildOfClass("Humanoid")
         if humanoid then
             humanoid.Died:Connect(function()
-                -- Сбрасываем состояние при смерти
                 Aiming = false
                 LockedTarget = nil
                 Shooting = false
                 
-                -- Ждем нового персонажа
                 MyCharacter = LocalPlayer.CharacterAdded:Wait()
+                task.wait(0.5) -- Подождать, пока персонаж полностью загрузится
+                InitializeFOV()
                 SetupCharacter()
             end)
         end
     end
 end
+
+local function SetFastProximityPrompt(enabled)
+    task.spawn(function()
+        for _, prompt in ipairs(Workspace:GetDescendants()) do
+            if prompt:IsA("ProximityPrompt") then
+                if enabled then
+                    prompt.HoldDuration = 0
+                else
+                    prompt.HoldDuration = 0.5 -- или любое стандартное значение
+                end
+            end
+            task.wait() -- даёт передышку, чтобы не лагало
+        end
+    end)
+end
+
+
 
 -- Инициализация FOV круга
 local function InitializeFOV()
@@ -101,7 +119,7 @@ local function InitializeFOV()
     FOV_Circle.Color = Settings.FOVColor
     FOV_Circle.Thickness = Settings.FOVThickness
     FOV_Circle.Filled = Settings.FOVFilled
-    FOV_Circle.Visible = Settings.ShowFOV and Settings.FOVVisible
+    FOV_Circle.Visible = Settings.FOVVisible
     FOV_Circle.Radius = Settings.AimFOV
 end
 
@@ -195,18 +213,81 @@ UtilityTab:CreateToggle({
     end
 })
 
+UtilityTab:CreateSection("Interaction")
+
+UtilityTab:CreateToggle({
+    Name = "Fast Proximity Prompt", 
+    CurrentValue = false, 
+    Callback = function(value)
+        SetFastProximityPrompt(value)
+    end
+})
+
+
+
+ChangelogsTab:CreateSection("Version 0.4.9")
+ChangelogsTab:CreateParagraph({
+    Title = "What's New:",
+    Content = [[
+- Fixed: Aimbot could be toggled with key even when disabled in UI
+- Code cleanup and stability tweaks
+    ]]
+})
+
+ChangelogsTab:CreateSection("Version 0.4.8")
+ChangelogsTab:CreateParagraph({
+    Title = "What's New:",
+    Content = [[
+- First non-BETA release
+- Optimized Fast Proximity Prompt (no more freeze)
+- Added Changelog tab
+    ]]
+})
+
+ChangelogsTab:CreateSection("Version 0.4.7")
+ChangelogsTab:CreateParagraph({
+    Title = "What's New:",
+    Content = [[
+- Added Fast Proximity Prompt toggle to Utility tab
+- Performance improvements
+    ]]
+})
+
+ChangelogsTab:CreateSection("Version 0.4.6")
+ChangelogsTab:CreateParagraph({
+    Title = "What's New:",
+    Content = [[
+- Manual Aimbot toggle via key (default: E)
+- Aimbot ignores dead NPCs
+- Fixed Noclip/Aimbot breaking on death + revive
+    ]]
+})
+
+ChangelogsTab:CreateSection("Version 0.4.5 BETA")
+ChangelogsTab:CreateParagraph({
+    Title = "Initial Beta:",
+    Content = [[
+- Core Aimbot System
+- AutoAim, Smoothing, FOV settings
+- Fullbright & Noclip utilities
+    ]]
+})
+
+
+
 -- Проверка валидности цели
 local function IsValidTarget(model)
     if not model or not model:IsA("Model") or model == MyCharacter then return false end
 
     local hum = model:FindFirstChildOfClass("Humanoid")
-    if not hum or hum.Health <= 0 then return false end
+    if not hum or hum.Health <= 0 or hum:GetState() == Enum.HumanoidStateType.Dead then return false end
 
     local player = Players:GetPlayerFromCharacter(model)
     if Settings.IgnorePlayers and player then return false end
 
     return true
 end
+
 
 local function GetTargetPart(model)
     if not model or not model:IsA("Model") then return nil end
@@ -342,10 +423,10 @@ end)
 -- Обработка клавиш
 UserInputService.InputBegan:Connect(function(input, gameProcessed)
     if gameProcessed then return end
-    
-    -- Включение/выключение прицеливания (работает независимо от AutoAim)
+
+    -- Toggle Aimbot manually (only if Aimbot is enabled in the toggle)
     if input.KeyCode == Settings.AimKey then
-        if Settings.Enabled then
+        if Settings.Enabled then  -- Проверяем, включён ли аимбот
             Aiming = not Aiming
             if not Aiming then
                 LockedTarget = nil
@@ -356,10 +437,18 @@ UserInputService.InputBegan:Connect(function(input, gameProcessed)
                 Duration = 2,
                 Image = 4483362458
             })
+        else
+            -- Если аимбот выключен, не даём переключать вручную
+            Rayfield:Notify({
+                Title = "Aimbot",
+                Content = "Aimbot is disabled, cannot toggle manual aim.",
+                Duration = 2,
+                Image = 4483362458
+            })
         end
     end
-    
-    -- Включение/выключение авто-стрельбы
+
+    -- Toggle AutoShoot
     if input.KeyCode == Settings.ShootKey then
         Shooting = not Shooting
         Rayfield:Notify({
@@ -371,6 +460,8 @@ UserInputService.InputBegan:Connect(function(input, gameProcessed)
     end
 end)
 
+
+
 -- Инициализация
 InitializeFOV()
 SetupCharacter()
@@ -378,7 +469,7 @@ UpdateNPCList()
 
 -- Уведомление
 Rayfield:Notify({
-    Title = "Advanced NPC Aimbot Loaded",
+    Title = "Script Loaded",
     Content = "Version: " .. scrVer,
     Duration = 5,
     Image = 4483362458
