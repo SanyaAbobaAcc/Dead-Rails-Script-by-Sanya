@@ -1,6 +1,6 @@
 -- Загрузка Rayfield UI
 local Rayfield = loadstring(game:HttpGet('https://sirius.menu/rayfield'))()
-local scrVer = "0.4.9 NOT STABLE"
+local scrVer = "0.4.9 STABLE"
 
 -- Создание окна
 local Window = Rayfield:CreateWindow({
@@ -48,9 +48,10 @@ local CharacterAddedConnection = nil
 local Settings = {
     Enabled = false,
     AutoAim = true,
+    ManualAim = false, 
     AimFOV = 120,
     MaxDistance = 500,
-    Smoothing = 0.5,
+    Smoothing = 0.6,
     PriorityPart = "Head",
     Use3DDistance = true,
     IgnorePlayers = true,
@@ -86,7 +87,7 @@ local function SetupCharacter()
                 Shooting = false
                 
                 MyCharacter = LocalPlayer.CharacterAdded:Wait()
-                task.wait(0.5) -- Подождать, пока персонаж полностью загрузится
+                task.wait(0.5)
                 InitializeFOV()
                 SetupCharacter()
             end)
@@ -96,20 +97,18 @@ end
 
 local function SetFastProximityPrompt(enabled)
     task.spawn(function()
-        for _, prompt in ipairs(Workspace:GetDescendants()) do
-            if prompt:IsA("ProximityPrompt") then
-                if enabled then
-                    prompt.HoldDuration = 0
-                else
-                    prompt.HoldDuration = 0.5 -- или любое стандартное значение
-                end
-            end
-            task.wait() -- даёт передышку, чтобы не лагало
+    -- Find all ProximityPrompt objects in the game
+    if enabled then
+    wait()
+    for _, prompt in ipairs(workspace:GetDescendants()) do
+        if prompt:IsA("ProximityPrompt") then
+            -- Configure prompt for fast activation
+            prompt.HoldDuration = 0
         end
+        end
+    end
     end)
 end
-
-
 
 -- Инициализация FOV круга
 local function InitializeFOV()
@@ -137,64 +136,147 @@ end
 
 -- UI элементы
 AimbotTab:CreateSection("Main")
-AimbotTab:CreateToggle({Name = "Enable Aimbot", CurrentValue = Settings.Enabled, Callback = function(v) 
-    Settings.Enabled = v 
-    if not v then 
-        Aiming = false
-        LockedTarget = nil
+AimbotTab:CreateToggle({
+    Name = "Enable Aimbot", 
+    CurrentValue = Settings.Enabled, 
+    Callback = function(v) 
+        Settings.Enabled = v 
+        if not v then 
+            Aiming = false
+            LockedTarget = nil
+        end
     end
-end})
+})
 
-AimbotTab:CreateToggle({Name = "Auto Aim NPC", CurrentValue = Settings.AutoAim, Callback = function(v) 
-    Settings.AutoAim = v 
-    if not v and not Aiming then
-        LockedTarget = nil
+AimbotTab:CreateToggle({
+    Name = "Auto Aim NPC", 
+    CurrentValue = Settings.AutoAim, 
+    Callback = function(v) 
+        Settings.AutoAim = v 
+        if not v and not Settings.ManualAim then
+            LockedTarget = nil
+            Aiming = false
+        end
     end
-end})
+})
 
-AimbotTab:CreateToggle({Name = "Auto Shoot", CurrentValue = Settings.AutoShoot, Callback = function(v) Settings.AutoShoot = v end})
+AimbotTab:CreateToggle({
+    Name = "Manual Aim Mode",
+    CurrentValue = Settings.ManualAim,
+    Callback = function(v)
+        Settings.ManualAim = v
+        if not v then
+            Aiming = false
+            LockedTarget = nil
+        end
+    end
+})
+
+AimbotTab:CreateToggle({
+    Name = "Auto Shoot", 
+    CurrentValue = Settings.AutoShoot, 
+    Callback = function(v) 
+        Settings.AutoShoot = v 
+    end
+})
 
 AimbotTab:CreateSection("Targeting")
-AimbotTab:CreateSlider({Name = "Aim FOV", Range = {50, 500}, Increment = 5, CurrentValue = Settings.AimFOV, Callback = function(v) 
-    Settings.AimFOV = v 
-    if FOV_Circle then
-        FOV_Circle.Radius = v
+AimbotTab:CreateSlider({
+    Name = "Aim FOV", 
+    Range = {50, 500}, 
+    Increment = 5, 
+    CurrentValue = Settings.AimFOV, 
+    Callback = function(v) 
+        Settings.AimFOV = v 
+        if FOV_Circle then
+            FOV_Circle.Radius = v
+        end
     end
-end})
+})
 
-AimbotTab:CreateSlider({Name = "Max Distance", Range = {100, 2000}, Increment = 50, CurrentValue = Settings.MaxDistance, Callback = function(v) Settings.MaxDistance = v end})
-AimbotTab:CreateDropdown({Name = "Priority Part", Options = {"Head", "HumanoidRootPart", "UpperTorso"}, CurrentOption = Settings.PriorityPart, Callback = function(v) Settings.PriorityPart = v end})
-AimbotTab:CreateSlider({Name = "Smoothing", Range = {0.1, 1}, Increment = 0.05, CurrentValue = Settings.Smoothing, Callback = function(v) Settings.Smoothing = v end})
-AimbotTab:CreateToggle({Name = "Ignore Players", CurrentValue = Settings.IgnorePlayers, Callback = function(v) Settings.IgnorePlayers = v end})
+AimbotTab:CreateSlider({
+    Name = "Max Distance", 
+    Range = {100, 2000}, 
+    Increment = 50, 
+    CurrentValue = Settings.MaxDistance, 
+    Callback = function(v) 
+        Settings.MaxDistance = v 
+    end
+})
+
+AimbotTab:CreateDropdown({
+    Name = "Priority Part", 
+    Options = {"Head", "HumanoidRootPart", "UpperTorso"}, 
+    CurrentOption = Settings.PriorityPart, 
+    Callback = function(v) 
+        Settings.PriorityPart = v 
+    end
+})
+
+AimbotTab:CreateSlider({
+    Name = "Speed", 
+    Range = {0.1, 1}, 
+    Increment = 0.05, 
+    CurrentValue = Settings.Smoothing, 
+    Callback = function(v) 
+        Settings.Smoothing = v 
+    end
+})
+
+AimbotTab:CreateToggle({
+    Name = "Ignore Players", 
+    CurrentValue = Settings.IgnorePlayers, 
+    Callback = function(v) 
+        Settings.IgnorePlayers = v 
+    end
+})
 
 AimbotTab:CreateSection("FOV Circle")
-AimbotTab:CreateToggle({Name = "Show FOV", CurrentValue = Settings.ShowFOV, Callback = function(v) 
-    Settings.ShowFOV = v 
-    if FOV_Circle then
-        FOV_Circle.Visible = v and Settings.FOVVisible
+AimbotTab:CreateToggle({
+    Name = "Show FOV", 
+    CurrentValue = Settings.ShowFOV, 
+    Callback = function(v) 
+        Settings.ShowFOV = v 
+        if FOV_Circle then
+            FOV_Circle.Visible = v and Settings.FOVVisible
+        end
     end
-end})
+})
 
-AimbotTab:CreateToggle({Name = "FOV Filled", CurrentValue = Settings.FOVFilled, Callback = function(v) 
-    Settings.FOVFilled = v 
-    if FOV_Circle then
-        FOV_Circle.Filled = v
+AimbotTab:CreateToggle({
+    Name = "FOV Filled", 
+    CurrentValue = Settings.FOVFilled, 
+    Callback = function(v) 
+        Settings.FOVFilled = v 
+        if FOV_Circle then
+            FOV_Circle.Filled = v
+        end
     end
-end})
+})
 
-AimbotTab:CreateSlider({Name = "FOV Thickness", Range = {1, 10}, Increment = 1, CurrentValue = Settings.FOVThickness, Callback = function(v) 
-    Settings.FOVThickness = v 
-    if FOV_Circle then
-        FOV_Circle.Thickness = v
+AimbotTab:CreateSlider({
+    Name = "FOV Thickness", 
+    Range = {1, 10}, 
+    Increment = 1, 
+    CurrentValue = Settings.FOVThickness, 
+    Callback = function(v) 
+        Settings.FOVThickness = v 
+        if FOV_Circle then
+            FOV_Circle.Thickness = v
+        end
     end
-end})
+})
 
-AimbotTab:CreateColorPicker({Name = "FOV Color", Color = Settings.FOVColor, Callback = function(c) 
-    Settings.FOVColor = c 
-    if FOV_Circle then
-        FOV_Circle.Color = c
+AimbotTab:CreateColorPicker({
+    Name = "FOV Color", 
+    Color = Settings.FOVColor, 
+    Callback = function(c) 
+        Settings.FOVColor = c 
+        if FOV_Circle then
+            FOV_Circle.Color = c
+        end
     end
-end})
+})
 
 FullbrightTab:CreateToggle({
     Name = "Enable Fullbright",
@@ -214,7 +296,6 @@ UtilityTab:CreateToggle({
 })
 
 UtilityTab:CreateSection("Interaction")
-
 UtilityTab:CreateToggle({
     Name = "Fast Proximity Prompt", 
     CurrentValue = false, 
@@ -223,14 +304,14 @@ UtilityTab:CreateToggle({
     end
 })
 
-
-
 ChangelogsTab:CreateSection("Version 0.4.9")
 ChangelogsTab:CreateParagraph({
     Title = "What's New:",
     Content = [[
-- Fixed: Aimbot could be toggled with key even when disabled in UI
-- Code cleanup and stability tweaks
+- Added separate Manual Aim mode
+- Fixed aiming toggle issues
+- Improved target acquisition logic
+- Better notifications system
     ]]
 })
 
@@ -238,7 +319,6 @@ ChangelogsTab:CreateSection("Version 0.4.8")
 ChangelogsTab:CreateParagraph({
     Title = "What's New:",
     Content = [[
-- First non-BETA release
 - Optimized Fast Proximity Prompt (no more freeze)
 - Added Changelog tab
     ]]
@@ -273,8 +353,6 @@ ChangelogsTab:CreateParagraph({
     ]]
 })
 
-
-
 -- Проверка валидности цели
 local function IsValidTarget(model)
     if not model or not model:IsA("Model") or model == MyCharacter then return false end
@@ -287,7 +365,6 @@ local function IsValidTarget(model)
 
     return true
 end
-
 
 local function GetTargetPart(model)
     if not model or not model:IsA("Model") then return nil end
@@ -319,7 +396,7 @@ local function UpdateNPCList()
     end
 end
 
--- Автоматическое наведение на ближайшего NPC в радиусе FOV
+-- Автоматическое наведение на ближайшего NPC
 local function AutoAimAtNearestNPC()
     if not Settings.Enabled or not MyCharacter then return end
     
@@ -347,11 +424,14 @@ local function AutoAimAtNearestNPC()
         end
     end
     
-    if Settings.AutoAim and bestTarget then
+    if bestTarget then
         LockedTarget = bestTarget
-        Aiming = true
-    elseif not Aiming then
+        if not Settings.ManualAim then
+            Aiming = true
+        end
+    elseif not Settings.ManualAim then
         LockedTarget = nil
+        Aiming = false
     end
 end
 
@@ -384,8 +464,8 @@ RunService.RenderStepped:Connect(function()
         return
     end
     
-    -- Автоматическое прицеливание
-    if Settings.Enabled then
+    -- Автоматическое прицеливание (только если не в ручном режиме)
+    if Settings.Enabled and Settings.AutoAim and not Settings.ManualAim then
         AutoAimAtNearestNPC()
     end
     
@@ -403,8 +483,8 @@ RunService.RenderStepped:Connect(function()
         end
     end
     
-    -- Прицеливание
-    if Settings.Enabled and LockedTarget and LockedTarget.Parent and Aiming then
+    -- Применение прицеливания
+    if Settings.Enabled and (Aiming or (Settings.AutoAim and not Settings.ManualAim)) and LockedTarget and LockedTarget.Parent then
         local camPos = Camera.CFrame.Position
         local direction = (LockedTarget.Position - camPos).Unit
         local smoothDirection = Camera.CFrame.LookVector:Lerp(direction, Settings.Smoothing)
@@ -424,31 +504,41 @@ end)
 UserInputService.InputBegan:Connect(function(input, gameProcessed)
     if gameProcessed then return end
 
-    -- Toggle Aimbot manually (only if Aimbot is enabled in the toggle)
+    -- Ручное прицеливание по клавише
     if input.KeyCode == Settings.AimKey then
-        if Settings.Enabled then  -- Проверяем, включён ли аимбот
-            Aiming = not Aiming
+        if Settings.Enabled and Settings.ManualAim then
             if not Aiming then
+                -- Включаем ручное прицеливание
+                Aiming = true
+                AutoAimAtNearestNPC()  -- Попытаемся найти цель
+                Rayfield:Notify({
+                    Title = "Aimbot",
+                    Content = LockedTarget and "Manual Aim: Target Locked" or "Manual Aim: No Target Found",
+                    Duration = 2,
+                    Image = 4483362458
+                })
+            else
+                -- Выключаем ручное прицеливание
+                Aiming = false
                 LockedTarget = nil
+                Rayfield:Notify({
+                    Title = "Aimbot",
+                    Content = "Manual Aim Disabled",
+                    Duration = 2,
+                    Image = 4483362458
+                })
             end
+        elseif Settings.Enabled and not Settings.ManualAim then
             Rayfield:Notify({
                 Title = "Aimbot",
-                Content = Aiming and "Manual Aim Enabled" or "Manual Aim Disabled",
-                Duration = 2,
-                Image = 4483362458
-            })
-        else
-            -- Если аимбот выключен, не даём переключать вручную
-            Rayfield:Notify({
-                Title = "Aimbot",
-                Content = "Aimbot is disabled, cannot toggle manual aim.",
+                Content = "Manual mode is disabled in settings",
                 Duration = 2,
                 Image = 4483362458
             })
         end
     end
 
-    -- Toggle AutoShoot
+    -- Переключение автострельбы
     if input.KeyCode == Settings.ShootKey then
         Shooting = not Shooting
         Rayfield:Notify({
@@ -459,8 +549,6 @@ UserInputService.InputBegan:Connect(function(input, gameProcessed)
         })
     end
 end)
-
-
 
 -- Инициализация
 InitializeFOV()
