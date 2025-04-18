@@ -95,19 +95,34 @@ local function SetupCharacter()
     end
 end
 
+local FastProximityPromptEnabled = false
+local ProximityPromptConnections = {}
+
+-- Замените функцию SetFastProximityPrompt на эту новую версию
 local function SetFastProximityPrompt(enabled)
-    task.spawn(function()
-    -- Find all ProximityPrompt objects in the game
-    if enabled then
-    wait()
-    for _, prompt in ipairs(workspace:GetDescendants()) do
-        if prompt:IsA("ProximityPrompt") then
-            -- Configure prompt for fast activation
-            prompt.HoldDuration = 0
-        end
-        end
+    FastProximityPromptEnabled = enabled
+    
+    -- Очищаем предыдущие соединения
+    for _, connection in pairs(ProximityPromptConnections) do
+        connection:Disconnect()
     end
-    end)
+    ProximityPromptConnections = {}
+    
+    if enabled then
+        -- Обрабатываем существующие промпты
+        for _, prompt in ipairs(workspace:GetDescendants()) do
+            if prompt:IsA("ProximityPrompt") then
+                prompt.HoldDuration = 0
+            end
+        end
+        
+        -- Создаем соединение для новых промптов
+        table.insert(ProximityPromptConnections, workspace.DescendantAdded:Connect(function(descendant)
+            if FastProximityPromptEnabled and descendant:IsA("ProximityPrompt") then
+                descendant.HoldDuration = 0
+            end
+        end))
+    end
 end
 
 -- Инициализация FOV круга
