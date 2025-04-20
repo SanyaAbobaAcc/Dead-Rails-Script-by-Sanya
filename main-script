@@ -1,6 +1,6 @@
 -- Загрузка Rayfield UI
 local Rayfield = loadstring(game:HttpGet('https://sirius.menu/rayfield'))()
-local scrVer = "0.4.9 STABLE"
+local scrVer = "0.5.2 STABLE"
 
 -- Создание окна
 local Window = Rayfield:CreateWindow({
@@ -45,6 +45,25 @@ local NPCList = {}
 local CharacterAddedConnection = nil
 
 -- Настройки
+local ESP = {
+    Enabled = false,
+    Mode = "Boxes",
+    Color = Color3.fromRGB(255, 0, 0),
+    Boxes = {},
+    Highlights = {},
+    Texts = {},
+    ShowHP = true,
+    HPPosition = "Horizontal",
+    ShowHPText = true,
+    ShowName = true,
+    ShowDistance = true,
+    MaxDistance = 1000,
+    UpdateRate = 0.05, -- Уменьшено время обновления
+    IgnoreDead = true,
+    LastUpdate = 0
+}
+
+-- Настройки
 local Settings = {
     Enabled = false,
     AutoAim = true,
@@ -68,12 +87,15 @@ local Settings = {
     ShootKey = Enum.KeyCode.F,
     RefreshRate = 0.1,
     Noclip = false,
+    AntiFall = false,
+    AntiAFK = false,
 }
 
 -- Табы
 local AimbotTab = Window:CreateTab("Aimbot", 4483362458)
 local FullbrightTab = Window:CreateTab("Fullbright", 4483362458)
 local UtilityTab = Window:CreateTab("Utility", 4483362458)
+local ESPTab = Window:CreateTab("ESP", 4483362458)
 local ChangelogsTab = Window:CreateTab("Changelogs", 4483362458)
 
 -- Функция для обработки смерти/возрождения персонажа
@@ -91,6 +113,303 @@ local function SetupCharacter()
                 InitializeFOV()
                 SetupCharacter()
             end)
+        end
+    end
+end
+
+-- Функции для ESP
+local function CalculateCharacterSize(character)
+    if not character or not character:FindFirstChild("HumanoidRootPart") then return Vector3.new(0, 0, 0) end
+    
+    local root = character.HumanoidRootPart
+    local cf = root.CFrame
+    local size = root.Size
+    
+    -- Учитываем только HumanoidRootPart для производительности
+    return Vector3.new(size.X * 2, size.Y * 3, size.Z * 2) -- Увеличенные размеры для лучшей видимости
+end
+
+local function CreateESP(character)
+    if not character or not character:FindFirstChild("HumanoidRootPart") then return end
+    
+    -- Box ESP
+    local box = Drawing.new("Square")
+    box.Visible = false
+    box.Color = ESP.Color
+    box.Thickness = 2
+    box.Filled = false
+    box.Transparency = 1
+    box.ZIndex = 1
+    
+    -- Highlight ESP
+    local highlight = Instance.new("Highlight")
+    highlight.Parent = CoreGui
+    highlight.Adornee = character
+    highlight.Enabled = false
+    highlight.DepthMode = Enum.HighlightDepthMode.AlwaysOnTop
+    highlight.FillColor = ESP.Color
+    highlight.FillTransparency = 0.5
+    highlight.OutlineColor = ESP.Color
+    highlight.OutlineTransparency = 0
+    
+    -- HP Bar
+    local hpBar = Drawing.new("Line")
+    hpBar.Visible = false
+    hpBar.Color = Color3.fromRGB(0, 255, 0)
+    hpBar.Thickness = 2
+    hpBar.ZIndex = 2
+    
+    -- HP Text
+    local hpText = Drawing.new("Text")
+    hpText.Visible = false
+    hpText.Color = Color3.fromRGB(255, 255, 255)
+    hpText.Size = 13
+    hpText.Center = true
+    hpText.Outline = true
+    hpText.ZIndex = 3
+    
+    -- Name Text
+    local nameText = Drawing.new("Text")
+    nameText.Visible = false
+    nameText.Color = Color3.fromRGB(255, 255, 255)
+    nameText.Size = 14
+    nameText.Center = true
+    nameText.Outline = true
+    nameText.ZIndex = 3
+    
+    -- Distance Text
+    local distText = Drawing.new("Text")
+    distText.Visible = false
+    distText.Color = Color3.fromRGB(255, 255, 255)
+    distText.Size = 12
+    distText.Center = true
+    distText.Outline = true
+    distText.ZIndex = 3
+    
+    ESP.Boxes[character] = box
+    ESP.Highlights[character] = highlight
+    ESP.Texts[character] = {
+        hpBar = hpBar,
+        hpText = hpText,
+        nameText = nameText,
+        distText = distText
+    }
+end
+
+local function UpdateESP()
+    if not ESP.Enabled then return end
+    
+    local cameraPos = Camera.CFrame.Position
+    
+    for character, box in pairs(ESP.Boxes) do
+        if character and character.Parent and character:FindFirstChild("HumanoidRootPart") then
+            local rootPart = character.HumanoidRootPart
+            local humanoid = character:FindFirstChildOfClass("Humanoid")
+            
+            -- Проверка на мертвых NPC
+            if ESP.IgnoreDead and humanoid and humanoid.Health <= 0 then
+                box.Visible = false
+                if ESP.Highlights[character] then
+                    ESP.Highlights[character].Enabled = false
+                end
+                local texts = ESP.Texts[character]
+                if texts then
+                    texts.hpBar.Visible = false
+                    texts.hpText.Visible = false
+                    texts.nameText.Visible = false
+                    texts.distText.Visible = false
+                end
+                continue
+            end
+            
+            local position, onScreen = Camera:WorldToViewportPoint(rootPart.Position)
+            local distance = (rootPart.Position - cameraPos).Magnitude
+            
+            if onScreen and distance <= ESP.MaxDistance then
+                -- Calculate character size
+                local size = CalculateCharacterSize(character)
+                local scale = 1000 / position.Z
+                local width = math.max(20, size.X * scale)
+                local height = math.max(30, size.Y * scale)
+                
+                -- Update box
+                box.Size = Vector2.new(width, height)
+                box.Position = Vector2.new(position.X - width/2, position.Y - height/2)
+                box.Visible = ESP.Mode == "Boxes"
+                box.Color = ESP.Color
+                
+                -- Update highlight
+                local highlight = ESP.Highlights[character]
+                if highlight then
+                    highlight.Enabled = ESP.Mode == "Highlight"
+                    highlight.Adornee = character
+                    highlight.FillColor = ESP.Color
+                    highlight.OutlineColor = ESP.Color
+                    highlight.FillTransparency = 0.5
+                    highlight.OutlineTransparency = 0
+                end
+                
+                -- Get texts
+                local texts = ESP.Texts[character]
+                if texts then
+                    -- HP Bar
+                    if ESP.ShowHP and humanoid then
+                        local hpPercent = humanoid.Health / humanoid.MaxHealth
+                        local barLength = width * hpPercent
+                        
+                        if ESP.HPPosition == "Horizontal" then
+                            texts.hpBar.From = Vector2.new(position.X - width/2, position.Y - height/2 - 10)
+                            texts.hpBar.To = Vector2.new(position.X - width/2 + barLength, position.Y - height/2 - 10)
+                        else -- Vertical
+                            texts.hpBar.From = Vector2.new(position.X - width/2 - 10, position.Y + height/2)
+                            texts.hpBar.To = Vector2.new(position.X - width/2 - 10, position.Y + height/2 - height * hpPercent)
+                        end
+                        
+                        texts.hpBar.Color = Color3.fromHSV(hpPercent * 0.3, 1, 1)
+                        texts.hpBar.Visible = true
+                    else
+                        texts.hpBar.Visible = false
+                    end
+                    
+                    -- HP Text
+                    if ESP.ShowHPText and humanoid then
+                        texts.hpText.Text = string.format("%d/%d", math.floor(humanoid.Health), math.floor(humanoid.MaxHealth))
+                        texts.hpText.Position = Vector2.new(position.X, position.Y - height/2 - 25)
+                        texts.hpText.Visible = true
+                    else
+                        texts.hpText.Visible = false
+                    end
+                    
+                    -- Name Text
+                    if ESP.ShowName then
+                        texts.nameText.Text = character.Name
+                        texts.nameText.Position = Vector2.new(position.X, position.Y + height/2 + 5)
+                        texts.nameText.Visible = true
+                    else
+                        texts.nameText.Visible = false
+                    end
+                    
+                    -- Distance Text
+                    if ESP.ShowDistance then
+                        texts.distText.Text = string.format("%d studs", math.floor(distance))
+                        texts.distText.Position = Vector2.new(position.X, position.Y + height/2 + 20)
+                        texts.distText.Visible = true
+                    else
+                        texts.distText.Visible = false
+                    end
+                end
+            else
+                box.Visible = false
+                if ESP.Highlights[character] then
+                    ESP.Highlights[character].Enabled = false
+                end
+                
+                local texts = ESP.Texts[character]
+                if texts then
+                    texts.hpBar.Visible = false
+                    texts.hpText.Visible = false
+                    texts.nameText.Visible = false
+                    texts.distText.Visible = false
+                end
+            end
+        else
+            -- Cleanup if character no longer exists
+            box.Visible = false
+            box:Remove()
+            ESP.Boxes[character] = nil
+            
+            if ESP.Highlights[character] then
+                ESP.Highlights[character]:Destroy()
+                ESP.Highlights[character] = nil
+            end
+            
+            local texts = ESP.Texts[character]
+            if texts then
+                texts.hpBar:Remove()
+                texts.hpText:Remove()
+                texts.nameText:Remove()
+                texts.distText:Remove()
+                ESP.Texts[character] = nil
+            end
+        end
+    end
+end
+
+local function ClearESP()
+    for character, box in pairs(ESP.Boxes) do
+        box:Remove()
+    end
+    ESP.Boxes = {}
+    
+    for character, highlight in pairs(ESP.Highlights) do
+        highlight:Destroy()
+    end
+    ESP.Highlights = {}
+    
+    for character, texts in pairs(ESP.Texts) do
+        texts.hpBar:Remove()
+        texts.hpText:Remove()
+        texts.nameText:Remove()
+        texts.distText:Remove()
+    end
+    ESP.Texts = {}
+end
+
+local function ToggleESP(enabled)
+    ESP.Enabled = enabled
+    if not enabled then
+        ClearESP()
+        if ESPConnection then
+            ESPConnection:Disconnect()
+            ESPConnection = nil
+        end
+    else
+        -- Create ESP for existing NPCs
+        for _, model in ipairs(Workspace:GetChildren()) do
+            if model:IsA("Model") and model ~= MyCharacter and model:FindFirstChildOfClass("Humanoid") then
+                CreateESP(model)
+            end
+        end
+        
+        -- Подключаем отслеживание новых NPC
+        if not ESPConnection then
+            ESPConnection = Workspace.ChildAdded:Connect(function(child)
+                if ESP.Enabled and child:IsA("Model") and child ~= MyCharacter and child:FindFirstChildOfClass("Humanoid") then
+                    CreateESP(child)
+                end
+            end)
+        end
+    end
+end
+
+-- Функция для Anti-AFK
+local function ToggleAntiAFK(enabled)
+    Settings.AntiAFK = enabled
+    if enabled then
+        if AntiAFKConnection then
+            AntiAFKConnection:Disconnect()
+        end
+        AntiAFKConnection = game:GetService("Players").LocalPlayer.Idled:Connect(function()
+            game:GetService("VirtualUser"):Button2Down(Vector2.new(0,0), Workspace.CurrentCamera.CFrame)
+            task.wait(1)
+            game:GetService("VirtualUser"):Button2Up(Vector2.new(0,0), Workspace.CurrentCamera.CFrame)
+        end)
+        Rayfield:Notify({
+            Title = "Anti-AFK",
+            Content = "Enabled - You won't be kicked for being AFK",
+            Duration = 3,
+            Image = 4483362458
+        })
+    else
+        if AntiAFKConnection then
+            AntiAFKConnection:Disconnect()
+            AntiAFKConnection = nil
+            Rayfield:Notify({
+                Title = "Anti-AFK",
+                Content = "Disabled",
+                Duration = 3,
+                Image = 4483362458
+            })
         end
     end
 end
@@ -319,6 +638,126 @@ UtilityTab:CreateToggle({
     end
 })
 
+ESPTab:CreateToggle({
+    Name = "Enable ESP",
+    CurrentValue = ESP.Enabled,
+    Callback = function(v)
+        ToggleESP(v)
+    end
+})
+
+ESPTab:CreateDropdown({
+    Name = "ESP Mode",
+    Options = {"Boxes", "Highlight"},
+    CurrentOption = ESP.Mode,
+    Callback = function(v)
+        ESP.Mode = v
+    end
+})
+
+ESPTab:CreateColorPicker({
+    Name = "ESP Color",
+    Color = ESP.Color,
+    Callback = function(c)
+        ESP.Color = c
+    end
+})
+
+ESPTab:CreateToggle({
+    Name = "Show NPC HP",
+    CurrentValue = ESP.ShowHP,
+    Callback = function(v)
+        ESP.ShowHP = v
+    end
+})
+
+ESPTab:CreateDropdown({
+    Name = "HP Bar Position",
+    Options = {"Horizontal", "Vertical"},
+    CurrentOption = ESP.HPPosition,
+    Callback = function(v)
+        ESP.HPPosition = v
+    end
+})
+
+ESPTab:CreateToggle({
+    Name = "Show HP Text",
+    CurrentValue = ESP.ShowHPText,
+    Callback = function(v)
+        ESP.ShowHPText = v
+    end
+})
+
+ESPTab:CreateToggle({
+    Name = "Show Name",
+    CurrentValue = ESP.ShowName,
+    Callback = function(v)
+        ESP.ShowName = v
+    end
+})
+
+ESPTab:CreateToggle({
+    Name = "Show Distance",
+    CurrentValue = ESP.ShowDistance,
+    Callback = function(v)
+        ESP.ShowDistance = v
+    end
+})
+
+ESPTab:CreateToggle({
+    Name = "Ignore Dead NPC",
+    CurrentValue = ESP.IgnoreDead,
+    Callback = function(v)
+        ESP.IgnoreDead = v
+    end
+})
+
+ESPTab:CreateSlider({
+    Name = "Max Distance",
+    Range = {100, 5000},
+    Increment = 100,
+    CurrentValue = ESP.MaxDistance,
+    Callback = function(v)
+        ESP.MaxDistance = v
+    end
+})
+
+ChangelogsTab:CreateSection("Version 0.5.2")
+ChangelogsTab:CreateParagraph({
+    Title = "ESP System Improvements:",
+    Content = [[
+- Completely reworked ESP system for better performance
+- Added instant detection for newly spawned NPCs
+- Fixed Highlight mode rendering issues
+- Reduced ESP update time from 0.1s to 0.05s
+- Added proper cleanup for removed NPCs
+    ]]
+})
+
+ChangelogsTab:CreateSection("Version 0.5.1")
+ChangelogsTab:CreateParagraph({
+    Title = "Previous Update:",
+    Content = [[
+- Added HP bar system with position options
+- Added NPC name and distance displays
+- Improved box size calculations
+- Added max distance slider
+- Various visual improvements
+    ]]
+})
+
+ChangelogsTab:CreateSection("Version 0.5.0")
+ChangelogsTab:CreateParagraph({
+    Title = "Initial ESP Release:",
+    Content = [[
+- Added basic ESP system with two modes
+- Implemented Box and Highlight visuals
+- Added color customization
+- Basic NPC detection system
+- Core ESP functionality
+    ]]
+})
+
 ChangelogsTab:CreateSection("Version 0.4.9")
 ChangelogsTab:CreateParagraph({
     Title = "What's New:",
@@ -459,11 +898,18 @@ task.spawn(function()
 end)
 
 -- Основной цикл
-RunService.RenderStepped:Connect(function()
+RunService.RenderStepped:Connect(function(deltaTime)
     -- Обновляем позицию мыши
     LastMousePos = MousePos
     MousePos = UserInputService:GetMouseLocation()
+
+    ESP.LastUpdate = ESP.LastUpdate + deltaTime
+    if ESP.LastUpdate >= ESP.UpdateRate then
+        UpdateESP()
+        ESP.LastUpdate = 0
+    end
     
+
     -- Обновляем FOV круг
     if FOV_Circle then
         FOV_Circle.Position = MousePos
@@ -511,6 +957,26 @@ RunService.RenderStepped:Connect(function()
             mouse1press()
             task.wait(0.03)
             mouse1release()
+        end
+    end
+end)
+
+-- Очистка при выходе
+game:GetService("Players").LocalPlayer.CharacterRemoving:Connect(function()
+    ClearESP()
+    if ESPConnection then
+        ESPConnection:Disconnect()
+    end
+end)
+
+game:GetService("Players").PlayerRemoving:Connect(function(player)
+    if player == LocalPlayer then
+        ClearESP()
+        if ESPConnection then
+            ESPConnection:Disconnect()
+        end
+        if AntiAFKConnection then
+            AntiAFKConnection:Disconnect()
         end
     end
 end)
@@ -568,7 +1034,8 @@ end)
 -- Инициализация
 InitializeFOV()
 SetupCharacter()
-UpdateNPCList()
+UpdateNPCList()ToggleESP(ESP.Enabled) -- Инициализируем ESP с текущими настройками
+
 
 -- Уведомление
 Rayfield:Notify({
