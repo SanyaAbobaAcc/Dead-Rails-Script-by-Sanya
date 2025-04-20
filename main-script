@@ -30,6 +30,7 @@ local RunService = game:GetService("RunService")
 local UserInputService = game:GetService("UserInputService")
 local Workspace = game:GetService("Workspace")
 local Lighting = game:GetService("Lighting")
+local CoreGui = game:GetService("CoreGui")
 local LocalPlayer = Players.LocalPlayer
 local Camera = Workspace.CurrentCamera
 
@@ -43,6 +44,7 @@ local LastMousePos = Vector2.new()
 local FOV_Circle
 local NPCList = {}
 local CharacterAddedConnection = nil
+
 
 -- Настройки
 local ESP = {
@@ -635,6 +637,32 @@ UtilityTab:CreateToggle({
     CurrentValue = false, 
     Callback = function(value)
         SetFastProximityPrompt(value)
+    end
+})
+
+UtilityTab:CreateSection("Anti-Fall")
+UtilityTab:CreateToggle({
+    Name = "Anti-Fall Teleport", 
+    CurrentValue = Settings.AntiFall, 
+    Callback = function(v) 
+        Settings.AntiFall = v 
+        if v then
+            Rayfield:Notify({
+                Title = "Anti-Fall",
+                Content = "Enabled - You will be teleported back if you fall below Y=-15",
+                Duration = 3,
+                Image = 4483362458
+            })
+        end
+    end
+})
+
+UtilityTab:CreateSection("Anti-AFK")
+UtilityTab:CreateToggle({
+    Name = "Anti-AFK", 
+    CurrentValue = Settings.AntiAFK, 
+    Callback = function(v) 
+        ToggleAntiAFK(v)
     end
 })
 
